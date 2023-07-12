@@ -9,11 +9,11 @@ with codecs.open('europarl-v7.cs-en.en', 'r', encoding='utf-8', errors='ignore')
     english_sentences = en_file.readlines()
 
 data = list(zip(czech_sentences, english_sentences))
-# The preprocessing steps I have choosen unter are:
+# The preprocessing steps that have choosen are:
 #   1.remove lines with XML-Tags (starting with "<")
 #   2.strip empty lines and their correspondences
 #   3.lowercase the text
-# If you have some new ideas, just code and add in this list.
+# If you have some new ideas, just add in this list and code under TODO.
 data_processed = []
 xml_tag_pattern = re.compile(r'<[^>]+>')
 
@@ -26,7 +26,9 @@ for czech_sent, english_sent in data:
         english_sent = english_sent.lower()
 
         data_processed.append((czech_sent, english_sent))
+# TODO
 
+# show some results
 data_sample_size = int(0.00001 * len(data_processed))
 random.seed(8)
 data_sample = random.sample(data_processed, data_sample_size)
