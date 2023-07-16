@@ -2,8 +2,9 @@ import codecs
 import random
 import matplotlib.pyplot as plt
 from collections import Counter
+import nltk
 from nltk import ngrams
-import seaborn as sns
+from wordcloud import WordCloud
 
 with codecs.open('europarl-v7.cs-en.cs', 'r', encoding='utf-8', errors='ignore') as cs_file:
     czech_sentences = cs_file.readlines()
@@ -42,7 +43,28 @@ plt.title('Box Plot of Sentence Length Differences')
 plt.tight_layout()
 plt.show()
 
-# Most frequent words
+# Worldcloud of 20 most frequent words
+czech_sentences_joined = ' '.join(czech_sentences_sample)
+english_sentences_joined = ' '.join(english_sentences_sample)
+czech_word_counts = Counter(nltk.word_tokenize(czech_sentences_joined))
+english_word_counts = Counter(nltk.word_tokenize(english_sentences_joined))
+top_20_words_czech = czech_word_counts.most_common(20)
+top_20_words_english = english_word_counts.most_common(20)
+wordcloud_czech = WordCloud(width=800, height=400).generate_from_frequencies(dict(top_20_words_czech))
+wordcloud_english = WordCloud(width=800, height=400).generate_from_frequencies(dict(top_20_words_english))
+
+plt.figure(figsize=(12, 6))
+plt.subplot(121)
+plt.imshow(wordcloud_czech, interpolation="bilinear")
+plt.title('Wordcloud: 20 Most Frequent Words in Czech')
+plt.axis("off")
+plt.subplot(122)
+plt.imshow(wordcloud_english, interpolation="bilinear")
+plt.title('Wordcloud: 20 Most Frequent Words in English')
+plt.axis("off")
+plt.tight_layout()
+plt.show()
+
 czech_words = ' '.join(czech_sentences_sample).split()
 english_words = ' '.join(english_sentences_sample).split()
 
