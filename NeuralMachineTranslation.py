@@ -25,8 +25,8 @@ en_seq = en_tokenizer.texts_to_sequences(en_sent)
 en_padded_inputs = pad_sequences(en_seq, padding="post")
 cz_padded_inputs =  pad_sequences(cz_seq, padding="post")
 
-en_input = np.array([en_padded_inputs])
-cz_input = np.array([cz_padded_inputs])
+en_input_data = np.array([en_padded_inputs])
+cz_input_data = np.array([cz_padded_inputs])
 
 
 print(en_padded_inputs)
