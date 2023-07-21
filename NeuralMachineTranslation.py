@@ -26,10 +26,14 @@ def init_model(enco, deco, latent_dim, num_decoder_tokens):
     decoder_outputs = decoder_dense(decoder_outputs)
 
 
-    pass
+    model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+    return model
 
 
-def train_and_test_model():
+def train_and_test_model(model, encoder_data, decoder_data):
+    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
+    model.fit() #TODO
     pass
 
 def main():
