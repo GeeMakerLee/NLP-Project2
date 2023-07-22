@@ -35,7 +35,7 @@ def train_and_test_model(model, encoder_data, decoder_data, name):
     model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"])
     
     model.fit([encoder_data, decoder_data],
-        decoder_data[:, 1:],
+        decoder_data[:, 1:], #TODO fix, find proper target data
         batch_size=64,
         epochs=30,
         validation_split=0.2,
@@ -49,26 +49,28 @@ def main():
     test_set_size = 0.2
     #cz_train, cz_test , en_train, en_test = train_test_split(cz_sent, en_sent, test_size=test_set_size)
 
+    cz_train, cz_test , en_train, en_test = train_test_split(en_sent, cz_sent, test_size=test_set_size)
+
+
     cz_tokenizer = Tokenizer()
-    cz_tokenizer.fit_on_texts(cz_sent)
-    cz_seq = cz_tokenizer.texts_to_sequences(cz_sent)
+    cz_tokenizer.fit_on_texts(cz_train)
+    cz_seq = cz_tokenizer.texts_to_sequences(cz_train)
     vocabs_cz = len(cz_tokenizer.word_index) + 1
 
     en_tokenizer = Tokenizer()
-    en_tokenizer.fit_on_texts(en_sent)
-    en_seq = en_tokenizer.texts_to_sequences(en_sent)
+    en_tokenizer.fit_on_texts(en_train)
+    en_seq = en_tokenizer.texts_to_sequences(en_train)
     vocabs_en = len(en_tokenizer.word_index) + 1
 
-    en_padded_inputs = pad_sequences(en_seq, padding="post")
-    cz_padded_inputs =  pad_sequences(cz_seq, padding="post")
+    en_padded_inputs_train = pad_sequences(en_seq, padding="post")
+    cz_padded_inputs_train =  pad_sequences(cz_seq, padding="post")
 
-    en_input_data = np.array([en_padded_inputs])
-    cz_input_data = np.array([cz_padded_inputs])
+    en_input_data = np.array([en_padded_inputs_train])
+    cz_input_data = np.array([cz_padded_inputs_train])
 
-    print(en_padded_inputs)
-    print(cz_padded_inputs)
+    print(cz_padded_inputs_train)
+    print(en_padded_inputs_train)
 
-    cz_train, cz_test , en_train, en_test = train_test_split(en_input_data, cz_input_data, test_size=test_set_size)
     model_en_cz = init_model(en_train, cz_train, 32, vocabs_cz)
     model_cz_en = init_model(cz_train, en_train,  32, vocabs_en)
     train_and_test_model(model_en_cz, en_train, cz_train, "EN_CZ")
