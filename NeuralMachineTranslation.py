@@ -31,10 +31,17 @@ def init_model(enco, deco, latent_dim, num_decoder_tokens):
     return model
 
 
-def train_and_test_model(model, encoder_data, decoder_data):
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
-    model.fit() #TODO
-    pass
+def train_and_test_model(model, encoder_data, decoder_data, name):
+    model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"])
+    
+    model.fit([encoder_data, decoder_data],
+        decoder_data[:, 1:],
+        batch_size=64,
+        epochs=30,
+        validation_split=0.2,
+    )
+
+    model.save(name)
 
 def main():
     cz_sent = [tuple[0] for tuple in prep.data_processed]
@@ -50,7 +57,7 @@ def main():
     en_tokenizer = Tokenizer()
     en_tokenizer.fit_on_texts(en_sent)
     en_seq = en_tokenizer.texts_to_sequences(en_sent)
-    vocabs_eb = len(en_tokenizer.word_index) + 1
+    vocabs_en = len(en_tokenizer.word_index) + 1
 
     en_padded_inputs = pad_sequences(en_seq, padding="post")
     cz_padded_inputs =  pad_sequences(cz_seq, padding="post")
@@ -61,7 +68,16 @@ def main():
     print(en_padded_inputs)
     print(cz_padded_inputs)
 
-    cz_train, cz_test , en_train, en_test = train_test_split(cz_seq, en_seq, test_size=test_set_size)
+    cz_train, cz_test , en_train, en_test = train_test_split(en_input_data, cz_input_data, test_size=test_set_size)
+    model_en_cz = init_model(en_train, cz_train, 32, vocabs_cz)
+    model_cz_en = init_model(cz_train, en_train,  32, vocabs_en)
+    train_and_test_model(model_en_cz, en_train, cz_train, "EN_CZ")
+    train_and_test_model(model_cz_en, cz_train, en_train, "CZ_EN")
+
+    predictions_en_cz = model_en_cz.predict(en_test)
+    predictions_cz_en = model_cz_en.predict(cz_test)
+
+
 
 if __name__ == "__main__":
     main()
