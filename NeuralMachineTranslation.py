@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import Preprocessing as prep
 import tensorflow as tf
-import spacy
 from keras.preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
 from keras.models import Model
@@ -16,6 +15,12 @@ from sklearn.preprocessing import OneHotEncoder
     REFERENCES:
     The following section is a modified copy of Code Example "Character-level recurrent sequence-to-sequence model", authored by François Chollet 
     (https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/lstm_seq2seq/ Date created: 2017/09/29, Last modified: 2020/04/26
+    Last accessed: 2023/07/28
+
+    The code on the 2017/09/29 blog post authored by François Chollet
+    "A ten-minute introduction to sequence-to-sequence learning in Keras"
+    was also used as a reference for init_model and train_and_test_model
+    URL: https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html
     Last accessed: 2023/07/28
 """
 
@@ -30,16 +35,28 @@ def initialize_np_arrays(input_texts, target_texts):
     (https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/lstm_seq2seq/ Date created: 2017/09/29, Last modified: 2020/04/26
     Last accessed: 2023/07/28
     """
-    input_characters = sorted(list("".join(input_texts)))
-    target_characters = sorted(list("".join(target_texts)))
+    input_characters, target_characters = [], []
+    for i in input_texts:
+        for j in i:
+            input_characters.append(j)
+    input_characters = sorted(input_characters)
+    for i in target_texts:
+        for j in i:
+            target_characters.append(j)
+    target_characters = sorted(target_characters)
     num_encoder_tokens = len(input_characters)
     num_decoder_tokens = len(target_characters)
     max_encoder_seq_length = max([len(txt) for txt in input_texts])
     max_decoder_seq_length = max([len(txt) for txt in target_texts])
 
+    print("Number of samples:", len(input_texts))
+    print("Number of unique input tokens:", num_encoder_tokens)
+    print("Number of unique output tokens:", num_decoder_tokens)
+    print("Max sequence length for inputs:", max_encoder_seq_length)
+    print("Max sequence length for outputs:", max_decoder_seq_length)
+
     input_token_index = dict([(char, i) for i, char in enumerate(input_characters)])
     target_token_index = dict([(char, i) for i, char in enumerate(target_characters)])
-
 
     encoder_input_data = np.zeros(
         (len(input_texts), max_encoder_seq_length, num_encoder_tokens), dtype="float32"
@@ -56,28 +73,26 @@ def initialize_np_arrays(input_texts, target_texts):
             encoder_input_data[i, t, input_token_index[char]] = 1.0
         encoder_input_data[i, t + 1 :, input_token_index[" "]] = 1.0
         for t, char in enumerate(target_text):
+            # decoder_target_data is ahead of decoder_input_data by one timestep
             decoder_input_data[i, t, target_token_index[char]] = 1.0
             if t > 0:
+                # decoder_target_data will be ahead by one timestep
+                # and will not include the start character.
                 decoder_target_data[i, t - 1, target_token_index[char]] = 1.0
         decoder_input_data[i, t + 1 :, target_token_index[" "]] = 1.0
         decoder_target_data[i, t:, target_token_index[" "]] = 1.0
-
-        #TODO output!
     return encoder_input_data, decoder_input_data, decoder_target_data, num_encoder_tokens, num_decoder_tokens
 
 def init_model(latent_dim, embedding_size, num_encoder_tokens, num_decoder_tokens):
     """
     Function in order to define several models with different hyper-parameters
     """
+
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
-    #encoder_inputs = Input(shape=(len(enco), 1))
-    encoder_embedding = Embedding(num_encoder_tokens, embedding_size)(encoder_inputs)
-    encoder = LSTM(latent_dim, return_state=True)
+    encoder = LSTM(latent_dim, return_state=True) #TODO: Embed
     encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 
     decoder_inputs = Input(shape=(None, num_decoder_tokens))
-    decoder_embedding = Embedding(num_decoder_tokens, embedding_size)(decoder_inputs)
-    #decoder_inputs = Input(shape=(len(deco), 1))
     decoder = LSTM(latent_dim, return_state=True, return_sequences=True)
     decoder_outputs, _, _ = decoder(decoder_inputs, initial_state=[state_h, state_c])
 
@@ -88,6 +103,7 @@ def init_model(latent_dim, embedding_size, num_encoder_tokens, num_decoder_token
     model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
     return model
+
 
 
 def train_and_test_model(model, encoder_input_data, decoder_input_data, decoder_target_data, name):
@@ -113,6 +129,11 @@ def main():
     test_set_size = 0.2
 
     en_train, en_test, cz_train, cz_test  = train_test_split(en_sent, cz_sent, test_size=test_set_size)
+
+
+    #The following section is a modified copy of Code Example "Character-level recurrent sequence-to-sequence model", authored by François Chollet 
+    #(https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/lstm_seq2seq/ Date created: 2017/09/29, Last modified: 2020/04/26
+    #Last accessed: 2023/07/28
 
     e1, d1, t1, num_e1, num_d1 = initialize_np_arrays(input_texts= en_train, #EN-CZ
                          target_texts= cz_train)
@@ -142,7 +163,7 @@ def main():
                      encoder_input_data=e2, 
                      decoder_input_data=d2, 
                      decoder_target_data=t2, 
-                     name="EN_CZ")
+                     name="CZ_EN")
     
 
     #predictions_en_cz = model_en_cz.predict(en_test)
@@ -152,11 +173,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-"""
-    REFERENCES:
-    This code is a modified copy of Code Example "Character-level recurrent sequence-to-sequence model", authored by François Chollet 
-    (https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/lstm_seq2seq/ Date created: 2017/09/29, Last modified: 2020/04/26
-    Last accessed: 2023/07/28
-"""
