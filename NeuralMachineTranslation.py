@@ -1,3 +1,4 @@
+import os
 from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
@@ -5,6 +6,8 @@ import Preprocessing as prep
 import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from keras.initializers import Constant
 from keras.models import Model
 from keras.layers import Input, LSTM, Dense, Embedding
 from keras.utils import pad_sequences
@@ -24,9 +27,6 @@ from sklearn.preprocessing import OneHotEncoder
     Last accessed: 2023/07/28
 """
 
-#nlp = spacy.load("en_core_web_sm")
-
-#def preprocess_again(texts):
     
 
 def initialize_np_arrays(input_texts, target_texts):
@@ -81,20 +81,67 @@ def initialize_np_arrays(input_texts, target_texts):
                 decoder_target_data[i, t - 1, target_token_index[char]] = 1.0
         decoder_input_data[i, t + 1 :, target_token_index[" "]] = 1.0
         decoder_target_data[i, t:, target_token_index[" "]] = 1.0
-    return encoder_input_data, decoder_input_data, decoder_target_data, num_encoder_tokens, num_decoder_tokens
+    return encoder_input_data, decoder_input_data, decoder_target_data, num_encoder_tokens, num_decoder_tokens, input_token_index, target_token_index, input_characters, target_characters
 
-def init_model(latent_dim, embedding_size, num_encoder_tokens, num_decoder_tokens):
+def init_glove(voc, char_index):
+    """
+    The following function is a modified copy of Code Example "Using pre-trained word embeddings", authored by François Chollet 
+    (https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/pretrained_word_embeddings/ Date created: 2020/05/05 Last modified: 2020/05/05
+    Last accessed: 2023/07/29
+    """
+    path_to_glove_file = "/home/sherif/git/non-repository-misc/glove.6B/glove.6B.100d.txt"
+
+    embeddings_index = {}
+    with open(path_to_glove_file) as f:
+        for line in f:
+            char, coefs = line.split(maxsplit=1)
+            coefs = np.fromstring(coefs, "f", sep=" ")
+            embeddings_index[char] = coefs
+
+    print("Found %s char vectors." % len(embeddings_index))
+    num_tokens = len(voc) + 2
+    embedding_dim = 100
+    hits = 0
+    misses = 0
+
+    # Prepare embedding matrix
+    embedding_matrix = np.zeros((num_tokens, embedding_dim))
+    for char, i in char_index.items():
+        embedding_vector = embeddings_index.get(char)
+        if embedding_vector is not None:
+            # Chars not found in embedding index will be all-zeros.
+            # This includes the representation for "padding" and "OOV"
+            embedding_matrix[i] = embedding_vector
+            hits += 1
+        else:
+            misses += 1
+    print("Converted %d chars (%d misses)" % (hits, misses))
+
+    return num_tokens, embedding_dim, embedding_matrix
+
+
+
+def init_model(latent_dim, embedding_size, num_encoder_tokens, num_decoder_tokens, 
+               num_tokens, encoder_embedding_matrix, decoder_embedding_matrix):
     """
     Function in order to define several models with different hyper-parameters
     """
 
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
     encoder = LSTM(latent_dim, return_state=True) #TODO: Embed
-    encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+    encoder_embed_layer = Embedding(num_encoder_tokens + 2,
+                                    embedding_size, 
+                                    embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
+                                    trainable=False)(encoder_inputs)
+    encoder_outputs, state_h, state_c = encoder(encoder_embed_layer)
 
     decoder_inputs = Input(shape=(None, num_decoder_tokens))
     decoder = LSTM(latent_dim, return_state=True, return_sequences=True)
-    decoder_outputs, _, _ = decoder(decoder_inputs, initial_state=[state_h, state_c])
+    decoder_embed_layer = Embedding(num_decoder_tokens + 2,
+                                    embedding_size, 
+                                    embeddings_initializer=tf.keras.initializers.Constant(decoder_embedding_matrix), 
+                                    trainable=False)(decoder_inputs)
+    decoder_outputs, _, _ = decoder(decoder_embed_layer, initial_state=[state_h, state_c])
 
     decoder_dense = Dense(num_decoder_tokens, activation='softmax')
     decoder_outputs = decoder_dense(decoder_outputs)
@@ -135,23 +182,32 @@ def main():
     #(https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/lstm_seq2seq/ Date created: 2017/09/29, Last modified: 2020/04/26
     #Last accessed: 2023/07/28
 
-    e1, d1, t1, num_e1, num_d1 = initialize_np_arrays(input_texts= en_train, #EN-CZ
+    e1, d1, t1, num_e1, num_d1, idex1, tdex1, vi1, vt1 = initialize_np_arrays(input_texts= en_train, #EN-CZ
                          target_texts= cz_train)
     
-    e2, d2, t2, num_e2, num_d2 = initialize_np_arrays(input_texts= cz_train, #CZ-EN
+    e2, d2, t2, num_e2, num_d2, idex2, tdex2, vi2, vt2 = initialize_np_arrays(input_texts= cz_train, #CZ-EN
                          target_texts= en_train)
 
-
+    gl_e_nt1, gl_e_ed1, gl_e_emb1=init_glove(voc=vi1, char_index=idex1)
+    gl_t_nt1, gl_t_ed1, gl_t_emb1=init_glove(voc=vt1, char_index=tdex1)
+    gl_e_nt2, gl_e_ed2, gl_e_emb2=init_glove(voc=vi2, char_index=idex2)
+    gl_t_nt2, gl_t_ed2, gl_t_emb2=init_glove(voc=vt2, char_index=tdex2)
 
     model_en_cz = init_model(latent_dim=latent_dim, 
                              embedding_size= embedding_size, 
                              num_encoder_tokens= num_e1,
-                             num_decoder_tokens= num_d1)
+                             num_decoder_tokens= num_d1,
+                             num_tokens=gl_e_nt1,
+                             encoder_embedding_matrix=gl_e_emb1,
+                             decoder_embedding_matrix=gl_t_emb1)
     
     model_cz_en = init_model(latent_dim=latent_dim, 
                              embedding_size= embedding_size, 
                              num_encoder_tokens= num_e2,
-                             num_decoder_tokens= num_d2)
+                             num_decoder_tokens= num_d2,
+                             num_tokens=gl_e_nt2,
+                             encoder_embedding_matrix=gl_e_emb2,
+                             decoder_embedding_matrix=gl_t_emb2)
     
     train_and_test_model(model=model_en_cz, 
                          encoder_input_data=e1, 
@@ -166,8 +222,8 @@ def main():
                      name="CZ_EN")
     
 
-    #predictions_en_cz = model_en_cz.predict(en_test)
-    #predictions_cz_en = model_cz_en.predict(cz_test)
+    predictions_en_cz = model_en_cz.predict(en_test)
+    predictions_cz_en = model_cz_en.predict(cz_test)
 
 
 
