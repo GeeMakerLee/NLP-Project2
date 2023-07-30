@@ -6,7 +6,7 @@ import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
 from keras.models import Model
-from keras.layers import Input, LSTM, Dense, Embedding, Attention
+from keras.layers import Input, LSTM, Dense, Embedding, Attention, Reshape
 from keras.utils import pad_sequences, to_categorical
 
 def init_glove(num_vocabs, word_index):
@@ -50,23 +50,29 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
     Function in order to define several models with different hyper-parameters
     """
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
-    encoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True) #TODO: Embed
     print(encoder_embedding_matrix.shape)
-    #encoder_embed_layer = Embedding(num_encoder_tokens,
-    #                                embedding_size, 
-    #                                embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
-    #                                trainable=False)(encoder_inputs)
-    encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+    encoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True) #TODO: Embed
+    encoder_embed_layer = Embedding(num_encoder_tokens + 2,
+                                    embedding_size, 
+                                    embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
+                                    trainable=False)(encoder_inputs)
+    print(encoder_embed_layer.shape)
+    embed_shape = tf.shape(encoder_embed_layer)#TODO fix
+    encoder_embed_layer = tf.reshape(encoder_embed_layer, [embed_shape[1], embed_shape[2], embed_shape[3]])#
+
+    encoder_outputs, state_h, state_c = encoder(encoder_embed_layer)
 
     decoder_inputs = Input(shape=(None, num_decoder_tokens))
     decoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True)
-    #decoder_embed_layer = Embedding(num_decoder_tokens,
-    #                                embedding_size, 
-    #                                embeddings_initializer=tf.keras.initializers.Constant(decoder_embedding_matrix), 
-    #                                trainable=False)(decoder_inputs)
-    decoder_outputs, _, _ = decoder(decoder_inputs, initial_state=[state_h, state_c])
+    decoder_embed_layer = Embedding(num_decoder_tokens + 2,
+                                    embedding_size, 
+                                    embeddings_initializer=tf.keras.initializers.Constant(decoder_embedding_matrix), 
+                                    trainable=False)(decoder_inputs)  
+    embed_shape = tf.shape(decoder_embed_layer)#TODO fix
+    decoder_embed_layer = tf.reshape(decoder_embed_layer, [embed_shape[1], embed_shape[2], embed_shape[3]])#
+    decoder_outputs, _, _ = decoder(decoder_embed_layer, initial_state=[state_h, state_c])
 
-    decoder_attention = Attention()
+    decoder_attention = Attention() #TODO when not working with attention, watch for the +2
     decoder_attention_outputs = decoder_attention([encoder_outputs,decoder_outputs])
 
     decoder_dense = Dense(num_decoder_tokens, activation='softmax')
@@ -155,8 +161,8 @@ def main():
                              embedding_size= embedding_size, 
                              num_encoder_tokens= vocabs_cz,
                              num_decoder_tokens= vocabs_en,
-                             encoder_embedding_matrix=gl_e_emb2,
-                             decoder_embedding_matrix=gl_t_emb2)
+                             encoder_embedding_matrix=gl_t_emb2,
+                             decoder_embedding_matrix=gl_e_emb2)
 
 
     train_and_test_model(model_en_cz, en_data_1, cz_data_1, "EN_CZ")
