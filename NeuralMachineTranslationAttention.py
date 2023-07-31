@@ -11,6 +11,7 @@ from keras.utils import pad_sequences, to_categorical
 
 def init_glove(num_vocabs, word_index):
     """
+    [1]
     The following function is a modified copy of Code Example "Using pre-trained word embeddings", authored by François Chollet 
     (https://twitter.com/fchollet), URL: https://keras.io/examples/nlp/pretrained_word_embeddings/ Date created: 2020/05/05 Last modified: 2020/05/05
     Last accessed: 2023/07/29
@@ -49,14 +50,15 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
     """
     Function in order to define several models with different hyper-parameters
 
-
+    [2]
     The following section is a modified copy of Code Example  "A ten-minute introduction to sequence-to-sequence learning in Keras", authored by François Chollet 
     (https://twitter.com/fchollet), URL: https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html Date created: 2017/09/29,
     Last accessed: 2023/07/31
     """
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
-    encoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True) #TODO: Embed
-    #encoder_embed_layer = Embedding(num_encoder_tokens + 2,
+    encoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True)
+    #Create Embedding Layer (Embedding Layer structure based on tutorial from [1])
+    #encoder_embed_layer = Embedding(num_encoder_tokens,
     #                                embedding_size, 
     #                                embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
     #                                trainable=False)(encoder_inputs)
@@ -66,6 +68,7 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
 
     decoder_inputs = Input(shape=(None, num_decoder_tokens))
     decoder_lstm = LSTM(num_decoder_tokens, return_state=True, return_sequences=True)
+    #Create Embedding Layer (Embedding Layer structure based on tutorial from [1])
     #decoder_embed_layer = Embedding(num_decoder_tokens,
     #                                embedding_size, 
     #                                embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
@@ -73,6 +76,7 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
     
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=[state_h, state_c])
     """
+    [3]
     For defining the following attention mechanism, this tutorial was used: 
     "Add Attention Mechanism to an LSTM Model in Keras"
     URL:https://saturncloud.io/blog/add-attention-mechanism-to-an-lstm-model-in-keras/
@@ -83,11 +87,11 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
 
     decoder_attention = Attention()
     decoder_attention_outputs = decoder_attention([encoder_outputs,decoder_outputs])
-
+    #Create Dense Layer
     decoder_dense = Dense(num_decoder_tokens, activation='softmax')
     decoder_outputs = decoder_dense(decoder_attention_outputs)
 
-
+    #Define Model
     model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
     return model
@@ -109,6 +113,7 @@ def train_and_test_model(model, encoder_data, decoder_data, name):
     model.save(name)
 
 def main():
+    #Get Data
     cz_sent_full = [tuple[0] for tuple in prep.data_processed]
     cz_sent = cz_sent_full[:100]
     en_sent_full = [tuple[1] for tuple in prep.data_processed]
@@ -117,7 +122,7 @@ def main():
 
     cz_train, cz_test , en_train, en_test = train_test_split(en_sent, cz_sent, test_size=test_set_size)
 
-
+    #Reference used for tokenizer https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/text/Tokenizer
     cz_tokenizer = Tokenizer()
     cz_tokenizer.fit_on_texts(cz_train)
     cz_seq = cz_tokenizer.texts_to_sequences(cz_train)
@@ -206,6 +211,10 @@ def main():
     results_encz = model_en_cz.evaluate([en_data_1, cz_data_1], batch_size=32)
     print(results_encz)
     predicted = model_en_cz.predict([en_data_1, cz_data_1])
+    print(predicted)
+    results_czen = model_cz_en.evaluate([cz_data_2, en_data_2], batch_size=32)
+    print(results_encz)
+    predicted = model_cz_en.predict([cz_data_2, en_data_2])
     print(predicted)
 
     
