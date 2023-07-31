@@ -72,7 +72,14 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
     #                                trainable=False)(decoder_inputs)
     
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=[state_h, state_c])
-
+    """
+    For defining the following attention mechanism, this tutorial was used: 
+    "Add Attention Mechanism to an LSTM Model in Keras"
+    URL:https://saturncloud.io/blog/add-attention-mechanism-to-an-lstm-model-in-keras/
+    Author: Saturn Cloud 
+    Date Published: Monday, 2023/07/10
+    Last accessed: 2023/07/31
+    """
 
     decoder_attention = Attention()
     decoder_attention_outputs = decoder_attention([encoder_outputs,decoder_outputs])
