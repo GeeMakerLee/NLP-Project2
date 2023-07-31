@@ -5,7 +5,7 @@ import Preprocessing as prep
 import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.layers import Input, LSTM, Dense, Embedding, Attention, Reshape
 from keras.utils import pad_sequences, to_categorical
 
@@ -48,31 +48,33 @@ def init_glove(num_vocabs, word_index):
 def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embedding_matrix, decoder_embedding_matrix, embedding_size):
     """
     Function in order to define several models with different hyper-parameters
+
+
+    The following section is a modified copy of Code Example  "A ten-minute introduction to sequence-to-sequence learning in Keras", authored by François Chollet 
+    (https://twitter.com/fchollet), URL: https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html Date created: 2017/09/29,
+    Last accessed: 2023/07/31
     """
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
-    print(encoder_embedding_matrix.shape)
     encoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True) #TODO: Embed
-    encoder_embed_layer = Embedding(num_encoder_tokens + 2,
-                                    embedding_size, 
-                                    embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
-                                    trainable=False)(encoder_inputs)
-    print(encoder_embed_layer.shape)
-    embed_shape = tf.shape(encoder_embed_layer)#TODO fix
-    encoder_embed_layer = tf.reshape(encoder_embed_layer, [embed_shape[1], embed_shape[2], embed_shape[3]])#
+    #encoder_embed_layer = Embedding(num_encoder_tokens + 2,
+    #                                embedding_size, 
+    #                                embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
+    #                                trainable=False)(encoder_inputs)
 
-    encoder_outputs, state_h, state_c = encoder(encoder_embed_layer)
+    
+    encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 
     decoder_inputs = Input(shape=(None, num_decoder_tokens))
-    decoder = LSTM(num_decoder_tokens, return_state=True, return_sequences=True)
-    decoder_embed_layer = Embedding(num_decoder_tokens + 2,
-                                    embedding_size, 
-                                    embeddings_initializer=tf.keras.initializers.Constant(decoder_embedding_matrix), 
-                                    trainable=False)(decoder_inputs)  
-    embed_shape = tf.shape(decoder_embed_layer)#TODO fix
-    decoder_embed_layer = tf.reshape(decoder_embed_layer, [embed_shape[1], embed_shape[2], embed_shape[3]])#
-    decoder_outputs, _, _ = decoder(decoder_embed_layer, initial_state=[state_h, state_c])
+    decoder_lstm = LSTM(num_decoder_tokens, return_state=True, return_sequences=True)
+    #decoder_embed_layer = Embedding(num_decoder_tokens,
+    #                                embedding_size, 
+    #                                embeddings_initializer=tf.keras.initializers.Constant(encoder_embedding_matrix), 
+    #                                trainable=False)(decoder_inputs)
+    
+    decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=[state_h, state_c])
 
-    decoder_attention = Attention() #TODO when not working with attention, watch for the +2
+
+    decoder_attention = Attention()
     decoder_attention_outputs = decoder_attention([encoder_outputs,decoder_outputs])
 
     decoder_dense = Dense(num_decoder_tokens, activation='softmax')
@@ -86,14 +88,14 @@ def init_model(latent_dim, num_encoder_tokens, num_decoder_tokens, encoder_embed
 
 def train_and_test_model(model, encoder_data, decoder_data, name):
 
-    decoder_input_data = decoder_data[:, :-1]
-    decoder_target_data = decoder_data[:, 1:]
+    decoder_input_data = np.pad(decoder_data[:, :-1], ((0, 0), (0, 1), (0, 0)), mode='constant')
+    decoder_target_data = np.pad(decoder_data[:, 1:], ((0, 0), (0, 1), (0, 0)), mode='constant')
     model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"])
     
     model.fit([encoder_data, decoder_input_data],
         decoder_target_data, 
         batch_size=32,
-        epochs=30,
+        epochs=3,
         validation_split=0.2,
     )
 
@@ -105,7 +107,6 @@ def main():
     en_sent_full = [tuple[1] for tuple in prep.data_processed]
     en_sent = en_sent_full[:100]
     test_set_size = 0.2
-    #cz_train, cz_test , en_train, en_test = train_test_split(cz_sent, en_sent, test_size=test_set_size)
 
     cz_train, cz_test , en_train, en_test = train_test_split(en_sent, cz_sent, test_size=test_set_size)
 
@@ -121,26 +122,52 @@ def main():
     en_seq = en_tokenizer.texts_to_sequences(en_train)
     max_en_seq = max([len(seq) for seq in en_seq])
     vocabs_en = len(en_tokenizer.word_index) + 1
+    ####FOR TESTING######
+    cz_tokenizer_test = Tokenizer()
+    cz_tokenizer_test.fit_on_texts(cz_test)
+    cz_seq_test = cz_tokenizer_test.texts_to_sequences(cz_test)
+    max_cz_seq_test = max([len(seq) for seq in cz_seq_test])
+    vocabs_cz_test = len(cz_tokenizer_test.word_index) + 1
+
+    en_tokenizer_test = Tokenizer()
+    en_tokenizer_test.fit_on_texts(en_test)
+    en_seq_test = en_tokenizer_test.texts_to_sequences(en_test)
+    max_en_seq_test = max([len(seq) for seq in en_seq_test])
+    vocabs_en_test = len(en_tokenizer_test.word_index) + 1    
 
     max_seq = max([max_cz_seq, max_en_seq])
-
+    max_seq_test = max([max_cz_seq_test, max_en_seq_test])
+   
     en_padded_inputs_train_1 = pad_sequences(en_seq, maxlen=max_seq ,padding="post")
-    cz_padded_inputs_train_1 =  pad_sequences(cz_seq, maxlen=max_seq + 1,padding="post")
+    print(en_padded_inputs_train_1.shape)
+    cz_padded_inputs_train_1 = pad_sequences(cz_seq, maxlen=max_seq,padding="post")
+    print(cz_padded_inputs_train_1.shape)
 
-    en_padded_inputs_train_2 = pad_sequences(en_seq, maxlen=max_seq + 1,padding="post")
-    cz_padded_inputs_train_2 =  pad_sequences(cz_seq, maxlen=max_seq,padding="post")
+    en_padded_inputs_train_2 = pad_sequences(en_seq, maxlen=max_seq ,padding="post")
+    print(en_padded_inputs_train_2.shape)
+    cz_padded_inputs_train_2 = pad_sequences(cz_seq, maxlen=max_seq,padding="post")#
+    print(cz_padded_inputs_train_2.shape)
+
+    
+    en_padded_inputs_test_1 = pad_sequences(en_seq_test, maxlen=max_seq_test ,padding="post")
+    cz_padded_inputs_test_1 = pad_sequences(cz_seq_test, maxlen=max_seq_test,padding="post")
+    en_padded_inputs_test_2 = pad_sequences(en_seq_test, maxlen=max_seq_test,padding="post")
+    cz_padded_inputs_test_2 = pad_sequences(cz_seq_test, maxlen=max_seq_test,padding="post")
+    
     
 
     en_data_1 = to_categorical(en_padded_inputs_train_1)
     cz_data_1 = to_categorical(cz_padded_inputs_train_1)
-
     en_data_2 = to_categorical(en_padded_inputs_train_2)
     cz_data_2 = to_categorical(cz_padded_inputs_train_2)
 
+    print(en_data_1.shape)
+    print(cz_data_1.shape)
 
-
-    #print(cz_padded_inputs_train)
-    #print(en_padded_inputs_train)
+    en_data_1_test = to_categorical(en_padded_inputs_test_1)
+    cz_data_1_test = to_categorical(cz_padded_inputs_test_1)
+    en_data_2_test = to_categorical(en_padded_inputs_test_2)
+    cz_data_2_test = to_categorical(cz_padded_inputs_test_2)
 
     latent_dim = 64
     embedding_size = 100
@@ -150,14 +177,16 @@ def main():
     gl_e_nt2, gl_e_ed2, gl_e_emb2=init_glove(num_vocabs=vocabs_en, word_index=en_tokenizer.word_index)
     gl_t_nt2, gl_t_ed2, gl_t_emb2=init_glove(num_vocabs=vocabs_cz, word_index=cz_tokenizer.word_index)
 
-    model_en_cz = init_model(latent_dim=latent_dim, 
+
+    
+    model_en_cz= init_model(latent_dim=latent_dim, 
                              embedding_size= embedding_size, 
                              num_encoder_tokens= vocabs_en,
                              num_decoder_tokens= vocabs_cz,
                              encoder_embedding_matrix=gl_e_emb1,
                              decoder_embedding_matrix=gl_t_emb1)
     
-    model_cz_en = init_model(latent_dim=latent_dim, 
+    model_cz_en= init_model(latent_dim=latent_dim, 
                              embedding_size= embedding_size, 
                              num_encoder_tokens= vocabs_cz,
                              num_decoder_tokens= vocabs_en,
@@ -167,10 +196,12 @@ def main():
 
     train_and_test_model(model_en_cz, en_data_1, cz_data_1, "EN_CZ")
     train_and_test_model(model_cz_en, cz_data_2, en_data_2, "CZ_EN")
+    results_encz = model_en_cz.evaluate([en_data_1, cz_data_1], batch_size=32)
+    print(results_encz)
+    predicted = model_en_cz.predict([en_data_1, cz_data_1])
+    print(predicted)
 
-    predictions_en_cz = model_en_cz.predict(en_test, cz_test)
-    predictions_cz_en = model_cz_en.predict(cz_test, en_test)
-
+    
 
 
 if __name__ == "__main__":
